@@ -1,5 +1,7 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace CS2.Util.Locale.Core
@@ -7,6 +9,7 @@ namespace CS2.Util.Locale.Core
     public class LocalizationFile
     {
         public string? FilePath { get; set; }
+        private Stream FileStream { get; set; }
         public LocalizationFileType Extension { get; private set; }
 
         public string? LocaleId { get; private set; }
@@ -39,9 +42,22 @@ namespace CS2.Util.Locale.Core
             }
         }
 
+        public LocalizationFile(Stream fileStream)
+        {
+            FileStream = fileStream;
+
+            StreamReader();
+        }
+
         public static LocalizationFile FromFile(string path)
         {
             var instance = new LocalizationFile(path);
+            return instance;
+        }
+
+        public static LocalizationFile FromFile(Stream fs)
+        {
+            var instance = new LocalizationFile(fs);
             return instance;
         }
 
@@ -56,8 +72,15 @@ namespace CS2.Util.Locale.Core
                 ArgumentNullException.ThrowIfNull(FilePath, nameof(FilePath));
             }
 
-            using var stream = File.OpenRead(FilePath);
-            using var reader = new BinaryReader(stream, Encoding.UTF8);
+            var stream = File.OpenRead(FilePath);
+            FileStream = stream;
+
+            StreamReader();
+        }
+
+        private void StreamReader()
+        {
+            using var reader = new BinaryReader(FileStream, Encoding.UTF8);
 
             _ = reader.ReadUInt16();
             NameInEnglish = reader.ReadString();
@@ -88,7 +111,8 @@ namespace CS2.Util.Locale.Core
                 ArgumentNullException.ThrowIfNull(FilePath, nameof(FilePath));
             }
 
-            foreach (var (key, value) in JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(FilePath))!)
+            foreach (var (key, value) in JsonSerializer.Deserialize<Dictionary<string, string>>(
+                         File.ReadAllText(FilePath))!)
             {
                 Localizations.Add(key, value);
             }
@@ -105,7 +129,10 @@ namespace CS2.Util.Locale.Core
 
             if (ext == LocalizationFileType.Json)
             {
-                File.WriteAllText(path, JsonSerializer.Serialize(Localizations, new JsonSerializerOptions { WriteIndented = true }));
+                File.WriteAllText(path,
+                    JsonSerializer.Serialize(Localizations,
+                        new JsonSerializerOptions
+                            {WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping}));
             }
             else
             {
